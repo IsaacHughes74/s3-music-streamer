@@ -1,8 +1,104 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import MusicLibrary from './MusicLibrary'
 import UploadSong from './UploadSong'
 
 function App() {
+  // Shared player state
+  const [currentSong, setCurrentSong] = useState(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const audioRef = useRef(null)
+
+  const playSong = (song) => {
+    if (currentSong?.id === song.id) {
+      if (isPlaying) {
+        audioRef.current.pause()
+        setIsPlaying(false)
+      } else {
+        audioRef.current.play()
+        setIsPlaying(true)
+      }
+    } else {
+      setCurrentSong(song)
+      setIsPlaying(true)
+      setTimeout(() => {
+        audioRef.current?.play()
+      }, 100)
+    }
+  }
+
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  return (
+    <div className="app">
+      <MusicLibrary onPlaySong={playSong} currentSong={currentSong} isPlaying={isPlaying} />
+
+      {/* Global Player */}
+      {currentSong && (
+        <>
+          <audio
+            ref={audioRef}
+            src={`/api/v1/songs/${currentSong.id}/stream`}
+            onPause={() => setIsPlaying(false)}
+            onPlay={() => setIsPlaying(true)}
+            onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+            onLoadedMetadata={(e) => setDuration(e.target.duration)}
+          />
+          <div className="player">
+            <div className="player-progress-ring">
+              <svg width="56" height="56" viewBox="0 0 56 56">
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="24"
+                  stroke="rgba(255, 255, 255, 0.1)"
+                  strokeWidth="3"
+                  fill="none"
+                />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="24"
+                  stroke="white"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 24}`}
+                  strokeDashoffset={`${2 * Math.PI * 24 * (1 - (duration > 0 ? currentTime / duration : 0))}`}
+                  strokeLinecap="round"
+                  transform="rotate(-90 28 28)"
+                  style={{ transition: 'stroke-dashoffset 0.1s linear' }}
+                />
+              </svg>
+              <button
+                className="player-button-icon"
+                onClick={() => playSong(currentSong)}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+              >
+                {isPlaying ? '⏸' : '▶'}
+              </button>
+            </div>
+            <div className="player-info">
+              <div className="player-title">{currentSong.title || 'Untitled'}</div>
+              <div className="player-artist">{currentSong.artist_name || 'Unknown Artist'}</div>
+              <div className="player-time">
+                {formatDuration(Math.floor(currentTime))} / {formatDuration(Math.floor(duration))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function OldApp() {
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

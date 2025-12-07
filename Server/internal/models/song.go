@@ -8,9 +8,12 @@ import (
 type Song struct {
 	ID          int64     `json:"id"`
 	Title       string    `json:"title"`
-	Artist      string    `json:"artist"`
-	Album       string    `json:"album"`
-	Duration    int       `json:"duration"` // duration in seconds
+	ArtistID    *int64    `json:"artist_id,omitempty"`
+	AlbumID     *int64    `json:"album_id,omitempty"`
+	TrackNumber *int      `json:"track_number,omitempty"`
+	ArtistName  string    `json:"artist_name,omitempty"` // For joined queries
+	AlbumTitle  string    `json:"album_title,omitempty"` // For joined queries
+	Duration    int       `json:"duration"`              // duration in seconds
 	FileSize    int64     `json:"file_size"`
 	ContentType string    `json:"content_type"`
 	CreatedAt   time.Time `json:"created_at"`

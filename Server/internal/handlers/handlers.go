@@ -28,11 +28,33 @@ func New(db *database.DB, s3 *storage.S3Client) *Handler {
 }
 
 func (h *Handler) ListSongs(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query(`
-		SELECT id, title, artist, album, duration, file_size, content_type, created_at, updated_at
-		FROM songs
-		ORDER BY created_at DESC
-	`)
+	// Support filtering by artist_id or album_id via query params
+	artistID := r.URL.Query().Get("artist_id")
+	albumID := r.URL.Query().Get("album_id")
+
+	query := `
+		SELECT s.id, s.title, s.artist_id, s.album_id, s.track_number, s.duration, s.file_size,
+		       s.content_type, s.created_at, s.updated_at,
+		       ar.name as artist_name, al.title as album_title
+		FROM songs s
+		LEFT JOIN artists ar ON s.artist_id = ar.id
+		LEFT JOIN albums al ON s.album_id = al.id
+	`
+
+	var rows *sql.Rows
+	var err error
+
+	if artistID != "" {
+		query += " WHERE s.artist_id = ? ORDER BY s.created_at DESC"
+		rows, err = h.db.Query(query, artistID)
+	} else if albumID != "" {
+		query += " WHERE s.album_id = ? ORDER BY s.track_number ASC, s.created_at DESC"
+		rows, err = h.db.Query(query, albumID)
+	} else {
+		query += " ORDER BY s.created_at DESC"
+		rows, err = h.db.Query(query)
+	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -42,12 +64,25 @@ func (h *Handler) ListSongs(w http.ResponseWriter, r *http.Request) {
 	songs := []models.Song{}
 	for rows.Next() {
 		var song models.Song
+		var artistName, albumTitle sql.NullString
+		var trackNumber sql.NullInt64
 		if err := rows.Scan(
-			&song.ID, &song.Title, &song.Artist, &song.Album, &song.Duration,
+			&song.ID, &song.Title, &song.ArtistID, &song.AlbumID, &trackNumber, &song.Duration,
 			&song.FileSize, &song.ContentType, &song.CreatedAt, &song.UpdatedAt,
+			&artistName, &albumTitle,
 		); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if trackNumber.Valid {
+			track := int(trackNumber.Int64)
+			song.TrackNumber = &track
+		}
+		if artistName.Valid {
+			song.ArtistName = artistName.String
+		}
+		if albumTitle.Valid {
+			song.AlbumTitle = albumTitle.String
 		}
 		songs = append(songs, song)
 	}
@@ -70,12 +105,20 @@ func (h *Handler) GetSong(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var song models.Song
+	var artistName, albumTitle sql.NullString
+	var trackNumber sql.NullInt64
 	err = h.db.QueryRow(`
-		SELECT id, title, artist, album, duration, file_size, content_type, created_at, updated_at
-		FROM songs WHERE id = ?
+		SELECT s.id, s.title, s.artist_id, s.album_id, s.track_number, s.duration, s.file_size,
+		       s.content_type, s.created_at, s.updated_at,
+		       ar.name as artist_name, al.title as album_title
+		FROM songs s
+		LEFT JOIN artists ar ON s.artist_id = ar.id
+		LEFT JOIN albums al ON s.album_id = al.id
+		WHERE s.id = ?
 	`, id).Scan(
-		&song.ID, &song.Title, &song.Artist, &song.Album, &song.Duration,
+		&song.ID, &song.Title, &song.ArtistID, &song.AlbumID, &trackNumber, &song.Duration,
 		&song.FileSize, &song.ContentType, &song.CreatedAt, &song.UpdatedAt,
+		&artistName, &albumTitle,
 	)
 	if err == sql.ErrNoRows {
 		http.Error(w, "song not found", http.StatusNotFound)
@@ -84,6 +127,17 @@ func (h *Handler) GetSong(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if trackNumber.Valid {
+		track := int(trackNumber.Int64)
+		song.TrackNumber = &track
+	}
+	if artistName.Valid {
+		song.ArtistName = artistName.String
+	}
+	if albumTitle.Valid {
+		song.AlbumTitle = albumTitle.String
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -98,9 +152,9 @@ func (h *Handler) CreateSong(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.db.Exec(`
-		INSERT INTO songs (title, artist, album, duration, file_size, content_type)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, song.Title, song.Artist, song.Album, song.Duration, song.FileSize, song.ContentType)
+		INSERT INTO songs (title, artist_id, album_id, track_number, duration, file_size, content_type)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, song.Title, song.ArtistID, song.AlbumID, song.TrackNumber, song.Duration, song.FileSize, song.ContentType)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -206,18 +260,40 @@ func (h *Handler) UploadSong(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	title := r.FormValue("title")
-	artist := r.FormValue("artist")
-	album := r.FormValue("album")
+	artistIDStr := r.FormValue("artist_id")
+	albumIDStr := r.FormValue("album_id")
+	trackNumberStr := r.FormValue("track_number")
 	contentType := header.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "audio/mpeg"
 	}
 
+	var artistID, albumID *int64
+	var trackNumber *int
+	if artistIDStr != "" {
+		id, err := strconv.ParseInt(artistIDStr, 10, 64)
+		if err == nil {
+			artistID = &id
+		}
+	}
+	if albumIDStr != "" {
+		id, err := strconv.ParseInt(albumIDStr, 10, 64)
+		if err == nil {
+			albumID = &id
+		}
+	}
+	if trackNumberStr != "" {
+		track, err := strconv.Atoi(trackNumberStr)
+		if err == nil {
+			trackNumber = &track
+		}
+	}
+
 	// Step 1: Insert into database first to get an ID
 	result, err := h.db.Exec(`
-		INSERT INTO songs (title, artist, album, file_size, content_type)
-		VALUES (?, ?, ?, ?, ?)
-	`, title, artist, album, header.Size, contentType)
+		INSERT INTO songs (title, artist_id, album_id, track_number, file_size, content_type)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, title, artistID, albumID, trackNumber, header.Size, contentType)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -239,8 +315,9 @@ func (h *Handler) UploadSong(w http.ResponseWriter, r *http.Request) {
 	song := models.Song{
 		ID:          id,
 		Title:       title,
-		Artist:      artist,
-		Album:       album,
+		ArtistID:    artistID,
+		AlbumID:     albumID,
+		TrackNumber: trackNumber,
 		FileSize:    header.Size,
 		ContentType: contentType,
 	}

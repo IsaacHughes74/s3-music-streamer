@@ -159,14 +159,19 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(20, 20, 20, 0.95);
+  background: linear-gradient(135deg,
+    rgba(255, 107, 107, 0.95) 0%,
+    rgba(196, 69, 105, 0.95) 50%,
+    rgba(139, 71, 137, 0.95) 100%
+  );
   backdrop-filter: blur(20px);
   padding: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 2px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   gap: 1rem;
   z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .player-progress-ring {

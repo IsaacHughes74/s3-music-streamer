@@ -49,6 +49,21 @@ func main() {
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// Artist routes
+		r.Get("/artists", handler.ListArtists)
+		r.Post("/artists", handler.CreateArtist)
+		r.Get("/artists/{id}", handler.GetArtist)
+		r.Put("/artists/{id}", handler.UpdateArtist)
+		r.Delete("/artists/{id}", handler.DeleteArtist)
+
+		// Album routes
+		r.Get("/albums", handler.ListAlbums)
+		r.Post("/albums", handler.CreateAlbum)
+		r.Get("/albums/{id}", handler.GetAlbum)
+		r.Put("/albums/{id}", handler.UpdateAlbum)
+		r.Delete("/albums/{id}", handler.DeleteAlbum)
+
+		// Song routes
 		r.Get("/songs", handler.ListSongs)
 		r.Post("/songs", handler.CreateSong)
 		r.Post("/songs/upload", handler.UploadSong)

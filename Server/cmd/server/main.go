@@ -68,6 +68,7 @@ func main() {
 		r.Post("/songs", handler.CreateSong)
 		r.Post("/songs/upload", handler.UploadSong)
 		r.Get("/songs/{id}", handler.GetSong)
+		r.Put("/songs/{id}", handler.UpdateSong)
 		r.Delete("/songs/{id}", handler.DeleteSong)
 		r.Get("/songs/{id}/stream", handler.StreamSong)
 	})

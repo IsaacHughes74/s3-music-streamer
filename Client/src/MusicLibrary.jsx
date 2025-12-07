@@ -4,6 +4,7 @@ import { fetchArtists, fetchAlbums, fetchSongs } from './api'
 import ArtistManager from './ArtistManager'
 import AlbumManager from './AlbumManager'
 import SongUploader from './SongUploader'
+import SongEditor from './SongEditor'
 
 function MusicLibrary({ onPlaySong, currentSong, isPlaying }) {
   const [artists, setArtists] = useState([])
@@ -17,6 +18,7 @@ function MusicLibrary({ onPlaySong, currentSong, isPlaying }) {
   const [showArtistModal, setShowArtistModal] = useState(false)
   const [showAlbumModal, setShowAlbumModal] = useState(false)
   const [showSongModal, setShowSongModal] = useState(false)
+  const [editingSong, setEditingSong] = useState(null)
 
   useEffect(() => {
     loadArtists()
@@ -86,6 +88,10 @@ function MusicLibrary({ onPlaySong, currentSong, isPlaying }) {
   const handleSongUploaded = (newSong) => {
     setSongs([...songs, newSong])
     loadSongs(selectedAlbum.id) // Reload to get proper ordering
+  }
+
+  const handleSongUpdated = (updatedSong) => {
+    loadSongs(selectedAlbum.id) // Reload to get updated data
   }
 
   if (loading) {
@@ -197,22 +203,33 @@ function MusicLibrary({ onPlaySong, currentSong, isPlaying }) {
                   <div
                     key={song.id}
                     className={`list-item song-item ${isCurrentSong ? 'playing' : ''}`}
-                    onClick={() => onPlaySong && onPlaySong(song)}
                   >
-                    {song.track_number && (
-                      <div className="track-number">{song.track_number}</div>
-                    )}
-                    <div className="item-name">{song.title}</div>
-                    {isCurrentSong && (
-                      <div className="now-playing-indicator">
-                        {isPlaying ? '♫' : '⏸'}
-                      </div>
-                    )}
-                    {song.duration > 0 && (
-                      <div className="item-meta">
-                        {Math.floor(song.duration / 60)}:{(song.duration % 60).toString().padStart(2, '0')}
-                      </div>
-                    )}
+                    <div className="song-content" onClick={() => onPlaySong && onPlaySong(song)}>
+                      {song.track_number && (
+                        <div className="track-number">{song.track_number}</div>
+                      )}
+                      <div className="item-name">{song.title}</div>
+                      {isCurrentSong && (
+                        <div className="now-playing-indicator">
+                          {isPlaying ? '♫' : '⏸'}
+                        </div>
+                      )}
+                      {song.duration > 0 && (
+                        <div className="item-meta">
+                          {Math.floor(song.duration / 60)}:{(song.duration % 60).toString().padStart(2, '0')}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      className="edit-song-button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingSong(song)
+                      }}
+                      title="Edit song"
+                    >
+                      ✎
+                    </button>
                   </div>
                 )
               })
@@ -249,6 +266,14 @@ function MusicLibrary({ onPlaySong, currentSong, isPlaying }) {
           artist={selectedArtist}
           onSongUploaded={handleSongUploaded}
           onClose={() => setShowSongModal(false)}
+        />
+      )}
+
+      {editingSong && (
+        <SongEditor
+          song={editingSong}
+          onSongUpdated={handleSongUpdated}
+          onClose={() => setEditingSong(null)}
         />
       )}
     </div>

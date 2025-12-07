@@ -172,6 +172,41 @@ func (h *Handler) CreateSong(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(song)
 }
 
+func (h *Handler) UpdateSong(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid song id", http.StatusBadRequest)
+		return
+	}
+
+	var song models.Song
+	if err := json.NewDecoder(r.Body).Decode(&song); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.db.Exec(`
+		UPDATE songs
+		SET title = ?, artist_id = ?, album_id = ?, track_number = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, song.Title, song.ArtistID, song.AlbumID, song.TrackNumber, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "song not found", http.StatusNotFound)
+		return
+	}
+
+	song.ID = id
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(song)
+}
+
 func (h *Handler) DeleteSong(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

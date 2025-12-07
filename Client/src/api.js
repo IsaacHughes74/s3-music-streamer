@@ -98,6 +98,16 @@ export const uploadSong = async (formData) => {
   return response.json()
 }
 
+export const updateSong = async (id, songData) => {
+  const response = await fetch(`${API_BASE}/songs/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(songData),
+  })
+  if (!response.ok) throw new Error('Failed to update song')
+  return response.json()
+}
+
 export const deleteSong = async (id) => {
   const response = await fetch(`${API_BASE}/songs/${id}`, {
     method: 'DELETE',
